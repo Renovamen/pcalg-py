@@ -242,6 +242,20 @@ def gaussCItest(suffstat, x, y, S):
     # Φ^{-1}(1-α/2)
     return 2 * (1 - norm.cdf(abs(res)))
 
+def Dfs(graph, k, path, vis):
+    flag = False
+    for i in range(len(graph)):
+        if (graph[i][k] == 1) and (vis[i] != True) :
+            
+            flag =True
+            vis[i] = True
+            path.append(i)
+            Dfs(graph, i, path, vis)
+            path.pop()
+            vis[i] = False
+
+    if flag == False:
+        print(path)
 
 def Draw(graph, labels):
     # 创建空有向图
@@ -264,14 +278,25 @@ if __name__ == '__main__':
     data = pd.read_csv(file)
 
     labels = [
+        "X0",
         "X1",
         "X2",
         "X3",
-        "X4",
-        "X5"
+        "X4"
     ]
 
     row_count = sum(1 for row in data)
     p = pc(suffStat={"C": data.corr().values, "n": data.values.shape[0]}, alpha=.05, labels=[str(i) for i in range(row_count)], indepTest=gaussCItest)
+    # 输出因果图矩阵
     print(p)
+
+    # Dfs 因果关系链
+    start = 2 # 起始异常节点
+    vis = [0 for i in range(row_count)]
+    vis[start] = True
+    path = []
+    path.append(start)
+    Dfs(p, start, path, vis)
+
+    # 画图
     Draw(p, labels)
