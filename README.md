@@ -2,7 +2,7 @@
 
 ## 博客
 
-这里只是简要解释了一下 PC 算法的流程，如果想看更详细的说明（或无法加载公式），可以看我的博客：[博客](https://renovamen.ink/post/2021/04/26/pc-algorithm/) / [知乎](https://zhuanlan.zhihu.com/p/368010458)
+这里只是简要解释了一下 PC 算法的流程，如果想看更详细的说明（或无法加载公式），可以看我的博客：[博客](https://zxh.io/post/2021/04/26/pc-algorithm/) / [知乎](https://zhuanlan.zhihu.com/p/368010458)
 
 
 &nbsp;
