@@ -1,26 +1,34 @@
 # PC 算法
 
-## 博客
+## 如何使用
 
-这里只是简要解释了一下 PC 算法的流程，如果想看更详细的说明（或无法加载公式），可以看我的博客：[博客](https://zxh.io/post/2021/04/26/pc-algorithm/) / [知乎](https://zhuanlan.zhihu.com/p/368010458)
+1. 安装依赖：
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+2. 修改 [`data/test.csv`](data/test.csv) 中的数据
+
+3. 运行：
+
+    ```bash
+    python run.py
+    ```
 
 
 &nbsp;
 
-## 参考
+## 算法
 
-- [Estimating High-Dimensional Directed Acyclic Graphs with the PC-Algorithm.](http://www.jmlr.org/papers/volume8/kalisch07a/kalisch07a.pdf) *Markus Kalisch and Peter Buhlmann.* JMLR 2007.
-- [An Algorithm for Fast Recovery of Sparse Causal Graphs.](http://shelf2.library.cmu.edu/Tech/28463803.pdf) *Peter Spirtes and Clark Glymour.* Social Science Computer Review 1991. 
-- [d-Separation: From Theorems to Algorithms.](https://arxiv.org/pdf/1304.1505.pdf) *Dan Geiger, et al.* UAI 1989.
-- [Frequency Distribution of the Values of the Correlation Coefficient in Samples from an Indefinitely Large Population.](https://www.quantresearch.org/Fisher%20transform%20seminal%20paper.pdf*) *R. A. Fisher.* Biometrika 1915.
-- [Elements of Graphical Models.](http://www.stats.ox.ac.uk/~steffen/teaching/gm10/stflournotes.pdf) *Steffen L. Lauritzen.* 2011. ↩︎
-- [Wikipedia: Fisher transformation](https://en.wikipedia.org/wiki/Fisher_transformation)
-- R 语言实现：[pcalg: Methods for Graphical Models and Causal Inference](https://cran.r-project.org/web/packages/pcalg/)
+### 博客
+
+这里只是简要解释了一下 PC 算法的流程，如果想看更详细的说明（或无法加载公式），可以看我的博客：[博客](https://blog.zxh.io/post/2021/04/26/pc-algorithm/) / [知乎](https://zhuanlan.zhihu.com/p/368010458)
 
 
 &nbsp;
 
-## 依赖方向确立
+### 依赖关系确立
 
 ![skeleton](assets/1.png)
 
@@ -31,7 +39,7 @@ line 11: 需要条件独立关系
 
 &nbsp;
 
-### 条件独立性 -> 偏相关系数
+#### 条件独立性 -> 偏相关系数
 
 偏相关系数：校正其它变量后某一变量与另一变量的相关关系，校正的意思可以理解为假定其它变量都取值为均数。
 
@@ -52,11 +60,13 @@ $$
 
 &nbsp;
 
-### Fisher Z Test
+#### Fisher Z Test
 
 用 Fisher Z Test 来判断 $\rho$ 是否为 0。显著性检验要求 $\rho$ 为正态分布，所以需要先将 $\rho$ 进行 Fisher's z-transformation，转换后可以认为是正态分布：
 
-<img src="assets/eq1.svg" width="250" />
+$$
+Z(i, j \mid K) = \frac{1}{2} \log (\frac{1 + \hat{\rho}_{i,j \mid K}}{1 - \hat{\rho}_{i,j \mid K}})
+$$
 
 - 零假设：$H_0(i, j \mid K): \rho_{i, j \mid K} \not= 0$
 - 对立假设：$H_1(i, j \mid K): \rho_{i, j \mid K} = 0$
@@ -68,7 +78,7 @@ $$
 
 &nbsp;
 
-## 依赖方向确立：骨架 -> CPDAGE
+### 依赖方向确立：骨架 -> CPDAGE
 
 依赖关系确立后，得到了一个无向图（骨架），现在需要确立依赖方向，把无向边变成有向边。
 
@@ -78,14 +88,14 @@ $$
 
 得到一个完全部分有向无环图（CPDAG）。
 
-可以看到 PC 算法得到的图是含有无向边的，这个图只是一个 CPDAG（依然有无向边），而不是真正意义上的贝叶斯网络（有向无环图），具体原因可以参考[我的博客](https://renovamen.ink/post/2021/04/26/pc-algorithm/#马尔科夫等价类)。
+可以看到 PC 算法得到的图是含有无向边的，这个图只是一个 CPDAG（依然有无向边），而不是真正意义上的贝叶斯网络（有向无环图），具体原因可以参考[我的博客](https://blog.zxh.io/post/2021/04/26/pc-algorithm/#马尔科夫等价类)。
 
-但任意贝叶斯网络都存在唯一的 CPDAG 与之马尔科夫等价，因此, CPDAG 可以作为贝叶斯网络的表示。
+但任意贝叶斯网络都存在唯一的 CPDAG 与之马尔科夫等价，因此，CPDAG 可以作为贝叶斯网络的表示。
 
 
 &nbsp;
 
-## 一些定义
+### 一些定义
 
 - **部分有向无环图**（Partially Directed Acyclic Graph，PDAG）：假设 $G = (V, E)$ 是一个图，若边集 $E$ 中包含有向边和无向边，且不存在有向环，则称 $G$ 是一个部分有向无环图
 
@@ -102,12 +112,19 @@ $$
 
 &nbsp;
 
-### R语言实现
+## 参考
 
-- `zStat(x, y, S, C)`: 计算并返回 $\sqrt{n - |K| - 3}| Z(i,j \mid K)$ 的值
+- [Estimating High-Dimensional Directed Acyclic Graphs with the PC-Algorithm.](http://www.jmlr.org/papers/volume8/kalisch07a/kalisch07a.pdf) *Markus Kalisch and Peter Buhlmann.* JMLR 2007.
+- [An Algorithm for Fast Recovery of Sparse Causal Graphs.](http://shelf2.library.cmu.edu/Tech/28463803.pdf) *Peter Spirtes and Clark Glymour.* Social Science Computer Review 1991. 
+- [d-Separation: From Theorems to Algorithms.](https://arxiv.org/pdf/1304.1505.pdf) *Dan Geiger, et al.* UAI 1989.
+- [Frequency Distribution of the Values of the Correlation Coefficient in Samples from an Indefinitely Large Population.](https://www.quantresearch.org/Fisher%20transform%20seminal%20paper.pdf*) *R. A. Fisher.* Biometrika 1915.
+- [Elements of Graphical Models.](http://www.stats.ox.ac.uk/~steffen/teaching/gm10/stflournotes.pdf) *Steffen L. Lauritzen.* 2011. ↩︎
+- [Wikipedia: Fisher transformation](https://en.wikipedia.org/wiki/Fisher_transformation)
+- R 语言实现：[pcalg: Methods for Graphical Models and Causal Inference](https://cran.r-project.org/web/packages/pcalg/)
+    - `zStat(x, y, S, C)`: 计算并返回 $\sqrt{n - |K| - 3}| Z(i,j \mid K)$ 的值
 
-- `pcorOrder(i, j, k, C)`: 计算并返回 $i$ 和 $j$ 与 $k$ 的偏相关系数
+    - `pcorOrder(i, j, k, C)`: 计算并返回 $i$ 和 $j$ 与 $k$ 的偏相关系数
 
-- `condIndFisherZ(x, y, S, C)`: 计算 $\sqrt{n - |K| - 3}| Z(i,j \mid K)$，返回它是否 <= `cutoff`
+    - `condIndFisherZ(x, y, S, C)`: 计算 $\sqrt{n - |K| - 3}| Z(i,j \mid K)$，返回它是否 <= `cutoff`
 
-- `gaussCItest(x, y, S, suffStat)`: 计算并返回 $\Phi^{-1} (1 - \alpha/2)$
+    - `gaussCItest(x, y, S, suffStat)`: 计算并返回 $\Phi^{-1} (1 - \alpha/2)$

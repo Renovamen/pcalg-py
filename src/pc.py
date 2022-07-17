@@ -1,11 +1,8 @@
 from itertools import combinations
 from scipy.stats import norm
-import pandas as pd
 import numpy as np
 import math
 from typing import List
-
-from utils import get_causal_chains, plot
 
 def get_neighbors(G, x: int, y: int):
     return [i for i in range(len(G)) if G[x][i] == True and i != y]
@@ -161,22 +158,3 @@ def pc(suff_stat, alpha: float = 0.05, verbose: bool = False):
         print(cpdag)
 
     return cpdag
-
-if __name__ == '__main__':
-    file_path = 'data/test.csv'
-    image_path = 'data/result.png'
-
-    data = pd.read_csv(file_path)
-    n_nodes = data.shape[1]
-    labels = data.columns.to_list()
-
-    p = pc(
-        suff_stat = { "C": data.corr().values, "n": data.shape[0] },
-        verbose = True
-    )
-
-    # DFS 因果关系链
-    print(get_causal_chains(p, start=2, labels=labels))
-
-    # 画图
-    plot(p, labels, image_path)
