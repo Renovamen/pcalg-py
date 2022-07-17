@@ -1,23 +1,41 @@
 import networkx as nx
 import matplotlib.pyplot as plt
+from typing import List, Optional
 
-def dfs(graph, k: int, path: list, vis: list):
+chains = []
+
+def dfs(graph, k: int, chain: List[int], visit: List[bool]):
     """因果关系链深搜"""
     flag = False
 
     for i in range(len(graph)):
-        if (graph[i][k] == 1) and (vis[i] != True) :
+        if graph[i][k] == 1 and not visit[i] :
             flag =True
-            vis[i] = True
-            path.append(i)
-            dfs(graph, i, path, vis)
-            path.pop()
-            vis[i] = False
+            visit[i] = True
+            chain.append(i)
 
-    if flag == False:
-        print(path)
+            dfs(graph, i, chain, visit)
 
-def plot(graph, labels: list, path: str):
+            chain.pop()
+            visit[i] = False
+
+    if not flag:
+        chains.append(chain.copy())
+
+def get_causal_chains(graph, start: int, labels: List[str]):
+    global chains
+    chains = []
+
+    visit = [False for _ in range(len(labels))]
+    visit[start] = True
+
+    chain = [start]
+
+    dfs(graph, start, chain, visit)
+
+    return "\n".join([" <- ".join(list(map(lambda x: labels[x] + f" ({x})", c))) for c in chains])
+
+def plot(graph, labels: List[str], path: str = Optional[None]):
     """可视化学习出的贝叶斯网络"""
     G = nx.DiGraph()  # 创建空有向图
 
@@ -25,8 +43,11 @@ def plot(graph, labels: list, path: str):
         G.add_node(labels[i])
         for j in range(len(graph[i])):
             if graph[i][j] == 1:
-                G.add_edges_from([(labels[i], labels[j])])
+                G.add_edge(labels[i], labels[j])
 
     nx.draw(G, with_labels=True)
-    plt.savefig(path)
+
+    if path:
+        plt.savefig(path)
+
     plt.show()

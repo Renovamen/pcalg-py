@@ -1,268 +1,182 @@
-import itertools
-from itertools import combinations, chain
-from scipy.stats import norm, pearsonr
+from itertools import combinations
+from scipy.stats import norm
 import pandas as pd
 import numpy as np
 import math
+from typing import List
 
-from utils import dfs, plot
+from utils import get_causal_chains, plot
 
-def subset(iterable):
-    """
-    求子集: subset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)
-    """
-    xs = list(iterable)
-    # 返回 iterator 而不是 list
-    return chain.from_iterable(combinations(xs, n) for n in range(len(xs) + 1))
+def get_neighbors(G, x: int, y: int):
+    return [i for i in range(len(G)) if G[x][i] == True and i != y]
 
-def skeleton(suffStat, indepTest, alpha, labels, m_max):
-    sepset = [[[] for i in range(len(labels))] for i in range(len(labels))]
+def gauss_ci_test(suff_stat, x: int, y: int, K: List[int], cut_at: float = 0.9999999):
+    """条件独立性检验"""
+    C = suff_stat["C"]
+    n = suff_stat["n"]
+
+    # ------ 偏相关系数 ------
+    if len(K) == 0:  # K 为空
+        r = C[x, y]
+
+    elif len(K) == 1:  # K 中只有一个点，即一阶偏相关系数
+        k = K[0]
+        r = (C[x, y] - C[x, k] * C[y, k]) / math.sqrt((1 - C[y, k] ** 2) * (1 - C[x, k] ** 2))
+
+    else:  # 其实我没太明白这里是怎么求的，但 R 语言的 pcalg 包就是这样写的
+        m = C[np.ix_([x] + [y] + K, [x] + [y] + K)]
+        p = np.linalg.pinv(m)
+        r = -p[0, 1] / math.sqrt(abs(p[0, 0] * p[1, 1]))
+
+    r = min(cut_at, max(-cut_at, r))
+
+    # Fisher's z-transform
+    z = 0.5 * math.log1p((2 * r) / (1 - r))
+    z_standard = z * math.sqrt(n - len(K) - 3)
+
+    # Φ^{-1}(1-α/2)
+    p_value = 2 * (1 - norm.cdf(abs(z_standard)))
+
+    return p_value
+
+def skeleton(suff_stat, alpha: float):
+    n_nodes = suff_stat["C"].shape[0]
+
+    # 分离集
+    O = [[[] for _ in range(n_nodes)] for _ in range(n_nodes)]
 
     # 完全无向图
-    G = [[True for i in range(len(labels))] for i in range(len(labels))]
+    G = [[i != j for i in range(n_nodes)] for j in range(n_nodes)]
 
-    for i in range(len(labels)):
-        G[i][i] = False  # 不需要检验 i -- i
+    # 点对（不包括 i -- i）
+    pairs = [(i, (n_nodes - j - 1)) for i in range(n_nodes) for j in range(n_nodes - i - 1)]
 
-    done = False  # done flag
+    done = False
+    l = 0  # 节点数为 l 的子集
 
-    ord = 0
-    n_edgetests = {0: 0}
-    while done != True and any(G) and ord <= m_max:
-        ord1 = ord + 1
-        n_edgetests[ord1] = 0
-
+    while done != True and any(G):
         done = True
 
-        # 相邻点对
-        ind = []
-        for i in range(len(G)):
-            for j in range(len(G[i])):
-                if G[i][j] == True:
-                    ind.append((i, j))
-
-        G1 = G.copy()
-
-        for x, y in ind:
+        # 遍历每个相邻点对
+        for x, y in pairs:
             if G[x][y] == True:
-                neighborsBool = [row[x] for row in G1]
-                neighborsBool[y] = False
+                neighbors = get_neighbors(G, x, y)  # adj(C,x) \ {y}
 
-                # adj(C,x) \ {y}
-                neighbors = [i for i in range(len(neighborsBool)) if neighborsBool[i] == True]
+                if len(neighbors) >= l:  # |adj(C, x) \ {y}| > l
+                    done = False
 
-                if len(neighbors) >= ord:
-
-                    # |adj(C, x) \ {y}| > ord
-                    if len(neighbors) > ord:
-                        done = False
-
-                    # |adj(C, x) \ {y}| = ord
-                    for neighbors_S in set(itertools.combinations(neighbors, ord)):
-                        n_edgetests[ord1] = n_edgetests[ord1] + 1
-
-                        # 节点 x, y 是否被 neighbors_S d-seperation
+                    # |adj(C, x) \ {y}| = l
+                    for K in set(combinations(neighbors, l)):
+                        # 节点 x, y 是否被节点数为 l 的子集 K d-seperation
                         # 条件独立性检验，返回 p-value
-                        pval = indepTest(suffStat, x, y, list(neighbors_S))
+                        p_value = gauss_ci_test(suff_stat, x, y, list(K))
 
                         # 条件独立
-                        if pval >= alpha:
-                            G[x][y] = G[y][x] = False
-
-                            # 把 neighbors_S 加入分离集
-                            sepset[x][y] = list(neighbors_S)
+                        if p_value >= alpha:
+                            G[x][y] = G[y][x] = False  # 去掉边 x -- y
+                            O[x][y] = O[y][x] = list(K)  # 把 K 加入分离集 O
                             break
 
-        ord += 1
+        l += 1
 
-    return {'sk': np.array(G), 'sepset': sepset}
+    return np.asarray(G, dtype=int), O
 
-def extend_cpdag(graph):
-    def rule1(pdag, solve_conf=False, unfVect=None):
-        """Rule 1: 如果存在链 a -> b - c，且 a, c 不相邻，把 b - c 变为 b -> c"""
-        search_pdag = pdag.copy()
-        ind = []
-        for i in range(len(pdag)):
-            for j in range(len(pdag)):
-                if pdag[i][j] == 1 and pdag[j][i] == 0:
-                    ind.append((i, j))
+def extend_cpdag(G, O):
+    n_nodes = G.shape[0]
 
-        #
-        for a, b in sorted(ind, key=lambda x:(x[1], x[0])):
-            isC = []
+    def rule1(g):
+        """Rule 1: 如果存在链 i -> j - k ，且 i, k 不相邻，则变为 i -> j -> k"""
+        pairs = [(i, j) for i in range(n_nodes) for j in range(n_nodes) if g[i][j] == 1 and g[j][i] == 0]  # 所有 i - j 点对
 
-            for i in range(len(search_pdag)):
-                if (search_pdag[b][i] == 1 and search_pdag[i][b] == 1) and (search_pdag[a][i] == 0 and search_pdag[i][a] == 0):
-                    isC.append(i)
+        for i, j in pairs:
+            all_k = [k for k in range(n_nodes) if (g[j][k] == 1 and g[k][j] == 1) and (g[i][k] == 0 and g[k][i] == 0)]
 
-            if len(isC) > 0:
-                for c in isC:
-                    if 'unfTriples' in graph.keys() and ((a, b, c) in graph['unfTriples'] or (c, b, a) in graph['unfTriples']):
-                        # if unfaithful, skip
-                        continue
-                    if pdag[b][c] == 1 and pdag[c][b] == 1:
-                        pdag[b][c] = 1
-                        pdag[c][b] = 0
-                    elif pdag[b][c] == 0 and pdag[c][b] == 1:
-                        pdag[b][c] = pdag[c][b] = 2
+            if len(all_k) > 0:
+                g[j][all_k] = 1
+                g[all_k][j] = 0
 
-        return pdag
+        return g
 
-    def rule2(pdag, solve_conf=False):
-        """Rule 2: 如果存在链 a -> c -> b，把 a - b 变为 a -> b"""
-        search_pdag = pdag.copy()
-        ind = []
+    def rule2(g):
+        """Rule 2: 如果存在链 i -> k -> j ，则把 i - j 变为 i -> j"""
+        pairs = [(i, j) for i in range(n_nodes) for j in range(n_nodes) if g[i][j] == 1 and g[j][i] == 1]  # 所有 i - j 点对
 
-        for i in range(len(pdag)):
-            for j in range(len(pdag)):
-                if pdag[i][j] == 1 and pdag[j][i] == 1:
-                    ind.append((i, j))
+        for i, j in pairs:
+            all_k = [k for k in range(n_nodes) if (g[i][k] == 1 and g[k][i] == 0) and (g[k][j] == 1 and g[j][k] == 0)]
 
-        #
-        for a, b in sorted(ind, key=lambda x:(x[1], x[0])):
-            isC = []
-            for i in range(len(search_pdag)):
-                if (search_pdag[a][i] == 1 and search_pdag[i][a] == 0) and (search_pdag[i][b] == 1 and search_pdag[b][i] == 0):
-                    isC.append(i)
-            if len(isC) > 0:
-                if pdag[a][b] == 1 and pdag[b][a] == 1:
-                    pdag[a][b] = 1
-                    pdag[b][a] = 0
-                elif pdag[a][b] == 0 and pdag[b][a] == 1:
-                    pdag[a][b] = pdag[b][a] = 2
+            if len(all_k) > 0:
+                g[i][j] = 1
+                g[j][1] = 0
 
-        return pdag
+        return g
 
-    def rule3(pdag, solve_conf=False, unfVect=None):
-        """Rule 3: 如果存在 a - c1 -> b 和 a - c2 -> b，且 c1, c2 不相邻，把 a - b 变为 a -> b"""
-        search_pdag = pdag.copy()
-        ind = []
-        for i in range(len(pdag)):
-            for j in range(len(pdag)):
-                if pdag[i][j] == 1 and pdag[j][i] == 1:
-                    ind.append((i, j))
+    def rule3(g):
+        """Rule 3: 如果存在 i - k1 -> j 和 i - k2 -> j ，且 k1, k2 不相邻，则把 i - j 变为 i -> j"""
+        pairs = [(i, j) for i in range(n_nodes) for j in range(n_nodes) if g[i][j] == 1 and g[j][i] == 1]  # 所有 i - j 点对
 
-        #
-        for a, b in sorted(ind, key=lambda x:(x[1], x[0])):
-            isC = []
+        for i, j in pairs:
+            all_k = [k for k in range(n_nodes) if (g[i][k] == 1 and g[k][i] == 1) and (g[k][j] == 1 and g[j][k] == 0)]
 
-            for i in range(len(search_pdag)):
-                if (search_pdag[a][i] == 1 and search_pdag[i][a] == 1) and (search_pdag[i][b] == 1 and search_pdag[b][i] == 0):
-                    isC.append(i)
+            if len(all_k) >= 2:
+                for k1, k2 in combinations(all_k, 2):
+                    if g[k1][k2] == 0 and g[k2][k1] == 0:
+                        g[i][j] = 1
+                        g[j][i] = 0
+                        break
 
-            if len(isC) >= 2:
-                for c1, c2 in combinations(isC, 2):
-                    if search_pdag[c1][c2] == 0 and search_pdag[c2][c1] == 0:
-                        # unfaithful
-                        if 'unfTriples' in graph.keys() and ((c1, a, c2) in graph['unfTriples'] or (c2, a, c1) in graph['unfTriples']):
-                            continue
-                        if search_pdag[a][b] == 1 and search_pdag[b][a] == 1:
-                            pdag[a][b] = 1
-                            pdag[b][a] = 0
-                            break
-                        elif search_pdag[a][b] == 0 and search_pdag[b][a] == 1:
-                            pdag[a][b] = pdag[b][a] = 2
-                            break
-
-        return pdag
+        return g
 
     # Rule 4: 如果存在链 i - k -> l 和 k -> l -> j，且 k 和 l 不相邻，把 i - j 改为 i -> j
     # 显然，这种情况不可能存在，所以不需要考虑 rule4
 
-    pdag = [[0 if graph['sk'][i][j] == False else 1 for i in range(len(graph['sk']))] for j in range(len(graph['sk']))]
-
-    ind = []
-    for i in range(len(pdag)):
-        for j in range(len(pdag[i])):
-            if pdag[i][j] == 1:
-                ind.append((i, j))
+    # 相邻点对
+    pairs = [(i, j) for i in range(n_nodes) for j in range(n_nodes) if G[i][j] == 1]
 
     # 把 x - y - z 变为 x -> y <- z
-    for x, y in sorted(ind, key=lambda x:(x[1],x[0])):
-        allZ = []
-        for z in range(len(pdag)):
-            if graph['sk'][y][z] == True and z != x:
-                allZ.append(z)
+    for x, y in sorted(pairs, key=lambda x:(x[1], x[0])):
+        all_z = [z for z in range(n_nodes) if G[y][z] == 1 and z != x]
 
-        for z in allZ:
-            if graph['sk'][x][z] == False \
-                and graph['sepset'][x][z] != None \
-                and graph['sepset'][z][x] != None \
-                and not (y in graph['sepset'][x][z] or y in graph['sepset'][z][x]):
-                pdag[x][y] = pdag[z][y] = 1
-                pdag[y][x] = pdag[y][z] = 0
+        for z in all_z:
+            if G[x][z] == 0 and y not in O[x][z]:
+                G[x][y] = G[z][y] = 1
+                G[y][x] = G[y][z] = 0
 
-    # 应用 rule1 - rule3
-    pdag = rule1(pdag)
-    pdag = rule2(pdag)
-    pdag = rule3(pdag)
+    # Orientation rule 1 - rule 3
+    old_G = np.zeros((n_nodes, n_nodes))
 
-    return np.array(pdag)
+    while not np.array_equal(old_G, G):
+        old_G = G.copy()
 
-def pc(suffStat, alpha, labels, indepTest, m_max=float("inf"), verbose=False):
-    # 骨架
-    graphDict = skeleton(suffStat, indepTest, alpha, labels, m_max)
-    # 扩展为 CPDAG
-    cpdag = extend_cpdag(graphDict)
-    # 输出贝叶斯网络图矩阵
+        G = rule1(G)
+        G = rule2(G)
+        G = rule3(G)
+
+    return np.array(G)
+
+def pc(suff_stat, alpha: float = 0.05, verbose: bool = False):
+    G, O = skeleton(suff_stat, alpha)  # 骨架
+    cpdag = extend_cpdag(G, O)  # 扩展为 CPDAG
+
     if verbose:
         print(cpdag)
+
     return cpdag
-
-def gauss_ci_test(suffstat, x, y, S):
-    """条件独立性检验"""
-    C = suffstat["C"]
-    n = suffstat["n"]
-
-    cut_at = 0.9999999
-
-    # ------ 偏相关系数 ------
-    # S中没有点
-    if len(S) == 0:
-        r = C[x, y]
-
-    # S 中只有一个点，即一阶偏相关系数
-    elif len(S) == 1:
-        r = (C[x, y] - C[x, S] * C[y, S]) / math.sqrt((1 - math.pow(C[y, S], 2)) * (1 - math.pow(C[x, S], 2)))
-
-    # 其实我没太明白这里是怎么求的，但 R 语言的 pcalg 包就是这样写的
-    else:
-        m = C[np.ix_([x]+[y] + S, [x] + [y] + S)]
-        PM = np.linalg.pinv(m)
-        r = -1 * PM[0, 1] / math.sqrt(abs(PM[0, 0] * PM[1, 1]))
-
-    r = min(cut_at, max(-1 * cut_at, r))
-
-    # Fisher’s z-transform
-    res = math.sqrt(n - len(S) - 3) * .5 * math.log1p((2 * r) / (1 - r))
-
-    # Φ^{-1}(1-α/2)
-    return 2 * (1 - norm.cdf(abs(res)))
-
 
 if __name__ == '__main__':
     file_path = 'data/test.csv'
     image_path = 'data/result.png'
 
     data = pd.read_csv(file_path)
-    labels = ["X0", "X1", "X2", "X3", "X4"]
+    n_nodes = data.shape[1]
+    labels = data.columns.to_list()
 
-    row_count = sum(1 for row in data)
     p = pc(
-        suffStat = {"C": data.corr().values, "n": data.values.shape[0]},
-        alpha = 0.05,
-        labels = [str(i) for i in range(row_count)],
-        indepTest = gauss_ci_test,
+        suff_stat = { "C": data.corr().values, "n": data.shape[0] },
         verbose = True
     )
 
     # DFS 因果关系链
-    start = 2  # 起始异常节点
-    vis = [0 for i in range(row_count)]
-    vis[start] = True
-    path = []
-    path.append(start)
-    dfs(p, start, path, vis)
+    print(get_causal_chains(p, start=2, labels=labels))
 
     # 画图
     plot(p, labels, image_path)
