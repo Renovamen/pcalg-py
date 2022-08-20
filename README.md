@@ -45,7 +45,8 @@ line 11: 需要条件独立关系
 
 PC 算法默认随机变量服从多元高斯分布，这时条件独立性与偏相关系数为 0 等价。
 
-表述得更准确一点：假设随机变量 $X$ 服从多元高斯分布，对于 $i \not = j \in (1, \dots, p), k \in (1, \dots, p) \backslash \{i, j\}$，用 $\rho_{i, j \mid k}$ 表示 $X(i)$ 和 $X(j)$ 与 $X^{(r)} (r \in k)$ 之间的偏相关系数。当且仅当 $X(i)$ 和 $X(j)$ 条件独立与 $X^{(r)} (r \in k)$ 时，$\rho_{i，j \in k} = 0$。
+表述得更准确一点：假设随机变量 $X$ 服从多元高斯分布，对于 $i \not = j \in (1, \dots, p), k \in (1, \dots, p) \backslash \{i, j\}$，用 $\rho_{i, j \mid k}$ 表示 $X(i)$ 和 $X(j)$ 与 $X^{(r)} (r \in k)$ 之间的偏相关系数。当且仅当 $X(i)$ 和 $X(j)$ 条件独立与 $X^{(r)} (r \in k)$ 时，$\rho_{i, j \in k} = 0$。
+
 
 这个结论是多元高斯分布的基本特性，证明过程可以参考 [Elements of Graphical Models](http://www.stats.ox.ac.uk/~steffen/teaching/gm10/stflournotes.pdf) 第 4.2.1 节。
 
@@ -103,9 +104,9 @@ $$
 
 - **可逆**：
 
-    - 有向无环图 $G = (V, E)$ ，任意有向边 $V_i \rightarrow V_j \in E$，若存在图 $G' = (V, E')$ 与 $G$ 等价，且 $V_j \rightarrow V_i \in E'$，则称有向边 $V_i \rightarrow V_j$ 在 $G$ 中是可逆的，否则是不可逆的
+    - 有向无环图 $G = (V, E)$，任意有向边 $V_i \rightarrow V_j \in E$，若存在图 $G' = (V, E')$ 与 $G$ 等价，且 $V_j \rightarrow V_i \in E'$，则称有向边 $V_i \rightarrow V_j$ 在 $G$ 中是可逆的，否则是不可逆的
 
-    - 同理, 对任意无向边 $V_i - V_j \in E​$，若存在 $G_1 = (V, E_1)​$、$G_2 = (V, E_2)​$ 均与 $G​$ 等价，且 $V_i \rightarrow V_j \in E_1​$、$V_j \rightarrow V_i \in E_2​$，则称无向边 $V_i - V_j​$ 在 $G​$ 中是可逆的，否则是不可逆的
+    - 同理，对任意无向边 $V_i - V_j \in E$，若存在 $G_1 = (V, E_1)$、$G_2 = (V, E_2)$ 均与 $G$ 等价，且 $V_i \rightarrow V_j \in E_1$、$V_j \rightarrow V_i \in E_2$，则称无向边 $V_i - V_j$ 在 $G$ 中是可逆的，否则是不可逆的
 
 - **完全部分有向无环图**（Completed Partially Directed Acyclic Graph，CPDAG：设 $G = (V, E)$ 是一个部分有向无环图，若 $E$ 中的有向边都是不可逆的，并且 $E$ 中的无向边都是可逆的，则称 $G$ 是一个完全部分有向无环图（CPDAG）
 
@@ -122,9 +123,6 @@ $$
 - [Wikipedia: Fisher transformation](https://en.wikipedia.org/wiki/Fisher_transformation)
 - R 语言实现：[pcalg: Methods for Graphical Models and Causal Inference](https://cran.r-project.org/web/packages/pcalg/)
     - `zStat(x, y, S, C)`: 计算并返回 $\sqrt{n - |K| - 3}| Z(i,j \mid K)$ 的值
-
     - `pcorOrder(i, j, k, C)`: 计算并返回 $i$ 和 $j$ 与 $k$ 的偏相关系数
-
     - `condIndFisherZ(x, y, S, C)`: 计算 $\sqrt{n - |K| - 3}| Z(i,j \mid K)$，返回它是否 <= `cutoff`
-
     - `gaussCItest(x, y, S, suffStat)`: 计算并返回 $\Phi^{-1} (1 - \alpha/2)$
