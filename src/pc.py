@@ -89,8 +89,9 @@ def extend_cpdag(G, O):
             all_k = [k for k in range(n_nodes) if (g[j][k] == 1 and g[k][j] == 1) and (g[i][k] == 0 and g[k][i] == 0)]
 
             if len(all_k) > 0:
-                g[j][all_k] = 1
-                g[all_k][j] = 0
+                for k in all_k:
+                    g[j][k] = 1
+                    g[k][j] = 0
 
         return g
 
